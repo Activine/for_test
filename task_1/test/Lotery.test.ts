@@ -1,8 +1,6 @@
-import { log } from "console";
-
-const { expect } = require("chai")
+const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
-const { utils } = require("ethers")
+const { utils } = require("ethers");
 const hre = require("hardhat");
 const { constants } = ethers;
 const { setBalance, time } = require("@nomicfoundation/hardhat-network-helpers");
@@ -16,12 +14,12 @@ describe("NFT Sale", function () {
     bnbKeeper: any,
     vrfCoordinator: any,
     lottery: any,
-    lotteryTicket: any
+    lotteryTicket: any;
 
-  let MINTER_ROLE: string;
+  let MINTER_ROLE: string, OPERATOR_ROLE: string;
   const day = 86400n;
 
-  let keyHash = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
+  const keyHash = "0x8af398995b04c28e9951adb9721ef74c74f93e6a478f39e7e0777be13527e7ef";
 
   const contractUSDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
   const oracleUSDT = "0xEe9F2375b4bdF6387aa8265dD4FB8F16512A1d46";
@@ -43,12 +41,12 @@ describe("NFT Sale", function () {
     // get control under usdtAccount & bnbAccount
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [usdtAcc]
+      params: [usdtAcc],
     });
 
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [bnbAcc]
+      params: [bnbAcc],
     });
 
     usdtKeeper = await ethers.getSigner(usdtAcc);
@@ -68,10 +66,10 @@ describe("NFT Sale", function () {
     await vrfCoordinator.deployed();
     expect(vrfCoordinator.address).to.be.properAddress;
 
-    let txSubscription = await vrfCoordinator.connect(owner).createSubscription();
+    const txSubscription = await vrfCoordinator.connect(owner).createSubscription();
     txSubscription.wait();
 
-    let txFundSub = await vrfCoordinator.connect(owner).fundSubscription(1, BigInt(1000000000000000000));
+    const txFundSub = await vrfCoordinator.connect(owner).fundSubscription(1, BigInt(1000000000000000000));
     txFundSub.wait();
 
     // deploy contracts & set minter role
@@ -80,164 +78,194 @@ describe("NFT Sale", function () {
     await lotteryTicket.deployed();
 
     const Lottery = await ethers.getContractFactory("TicketSale", owner);
-    lottery = await Lottery.deploy(
-      lotteryTicket.address,
-      1,
-      vrfCoordinator.address,
-      keyHash
-    );
+    lottery = await Lottery.deploy(lotteryTicket.address, 1, vrfCoordinator.address, keyHash);
     await lottery.deployed();
 
-    let txAddConsumer = await vrfCoordinator.connect(owner).addConsumer(1, lottery.address);
-    txAddConsumer.wait()
+    const txAddConsumer = await vrfCoordinator.connect(owner).addConsumer(1, lottery.address);
+    txAddConsumer.wait();
 
     MINTER_ROLE = await lotteryTicket.MINTER_ROLE();
+    OPERATOR_ROLE = await lottery.OPERATOR_ROLE();
     await lotteryTicket.grantRole(MINTER_ROLE, lottery.address);
-  })
+  });
 
   describe("Main Logic", function () {
     it("should be deployed!", async function () {
       expect(lotteryTicket.address).to.be.properAddress;
       expect(lottery.address).to.be.properAddress;
-    })
+    });
 
     it("grant role minter", async function () {
-      let tx = await lotteryTicket.grantRole(MINTER_ROLE, lottery.address);
-      tx.wait()
+      const tx = await lotteryTicket.grantRole(MINTER_ROLE, lottery.address);
+      tx.wait();
 
-      expect(await lotteryTicket.hasRole(MINTER_ROLE, lottery.address)).to.eq(true)
-    })
+      expect(await lotteryTicket.hasRole(MINTER_ROLE, lottery.address)).to.eq(true);
+    });
 
     it("success: set list of token by owner", async function () {
-      let txSetUSDT = await lottery.connect(owner).setTokenData(oracleUSDT, contractUSDT)
-      txSetUSDT.wait()
-      let txSetBNB = await lottery.connect(owner).setTokenData(oracleBNB, contractBNB)
-      txSetBNB.wait()
+      const txSetUSDT = await lottery.connect(owner).setTokenData(oracleUSDT, contractUSDT);
+      txSetUSDT.wait();
+      const txSetBNB = await lottery.connect(owner).setTokenData(oracleBNB, contractBNB);
+      txSetBNB.wait();
 
-      expect(await lottery.supportOfToken(contractUSDT)).to.eq(true)
-      await expect(txSetUSDT).to.emit(lottery, "SetNewToken").withArgs(oracleUSDT, contractUSDT, owner.address)
+      expect(await lottery.supportOfToken(contractUSDT)).to.eq(true);
+      await expect(txSetUSDT)
+        .to.emit(lottery, "SetNewToken")
+        .withArgs(oracleUSDT, contractUSDT, owner.address);
 
-      expect(await lottery.supportOfToken(contractBNB)).to.eq(true)
-      await expect(txSetBNB).to.emit(lottery, "SetNewToken").withArgs(oracleBNB, contractBNB, owner.address)
-    })
+      expect(await lottery.supportOfToken(contractBNB)).to.eq(true);
+      await expect(txSetBNB).to.emit(lottery, "SetNewToken").withArgs(oracleBNB, contractBNB, owner.address);
+    });
 
     it("reverted: set list of token by user", async function () {
-      let oracleDAI = "0x773616e4d11a78f511299002da57a0a94577f1f4";
-      let contractDAI = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+      const oracleDAI = "0x773616e4d11a78f511299002da57a0a94577f1f4";
+      const contractDAI = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 
-      await expect(lottery.connect(user).setTokenData(oracleDAI, contractDAI)).to.be.revertedWith("Caller is not a admin")
-    })
+      await expect(lottery.connect(user).setTokenData(oracleDAI, contractDAI)).to.be.revertedWith(
+        `AccessControl: account ${user.address.toLowerCase()} is missing role ${OPERATOR_ROLE}`
+      );
+    });
 
     describe("Buying NFT with Ether", function () {
       it("success: buy 15 NFT", async function () {
-        let price = utils.parseEther("0.02");
-        let amount = 150;
-        let totalprice = BigInt(price * amount);
-        let uri = "someURI.json";
+        const price = utils.parseEther("0.02");
+        const amount = 150;
+        const totalPrice = BigInt(price * amount);
+        const uri = "someURI.json";
 
-        let txBuy = await lottery.connect(user).purchaseTicket(ethers.constants.AddressZero, 0, amount, uri, { value: totalprice });
+        const txBuy = await lottery
+          .connect(user)
+          .purchaseTicket(ethers.constants.AddressZero, 0, amount, uri, { value: totalPrice });
         txBuy.wait();
 
-        let txBalanceNFT = await lotteryTicket.connect(user).balanceOf(user.address);
+        const txBalanceNFT = await lotteryTicket.connect(user).balanceOf(user.address);
         await expect(txBalanceNFT).to.eq(amount);
 
-        await expect(() => txBuy).to.changeEtherBalances([user, lottery], [-totalprice, totalprice]);
-        await expect(txBuy).to.emit(lottery, "PurchaseTicket").withArgs(user.address, amount, 0, totalprice);
-      })
+        await expect(() => txBuy).to.changeEtherBalances([user, lottery], [-totalPrice, totalPrice]);
+        await expect(txBuy).to.emit(lottery, "PurchaseTicket").withArgs(user.address, amount, 0, totalPrice);
+      });
       it("reverted: entered incorrectly price", async function () {
-        let price = utils.parseEther("0.01");
-        let amount = 150;
-        let totalprice = BigInt(price * amount);
-        let uri = "someURI.json";
+        const price = utils.parseEther("0.01");
+        const amount = 150;
+        const totalprice = BigInt(price * amount);
+        const uri = "someURI.json";
 
-        await expect(lottery.connect(user).purchaseTicket(ethers.constants.AddressZero, 0, amount, uri, { value: totalprice })).to.be.revertedWith("Price entered incorrectly");
-      })
-    })
+        await expect(
+          lottery
+            .connect(user)
+            .purchaseTicket(ethers.constants.AddressZero, 0, amount, uri, { value: totalprice })
+        ).to.be.revertedWith("Price entered incorrectly");
+      });
+    });
     describe("Buying NFT with USDT", function () {
       it("success: buy 10 NFT", async function () {
-        let priceForOne = ethers.utils.parseUnits("2", 16);
-        let exchangeRateUSDT = await lottery.connect(usdtKeeper).getLatestPrice(1);
-        let uri = "someURI.json";
-        let amount = 100;
-        let totalprice = Math.floor(priceForOne * amount * 1e6 / exchangeRateUSDT);
+        const priceForOne = ethers.utils.parseUnits("2", 16);
+        const exchangeRateUSDT = await lottery.connect(usdtKeeper).getLatestPrice(1);
+        const uri = "someURI.json";
+        const amount = 100;
+        const totalPrice = Math.floor((priceForOne * amount * 1e6) / exchangeRateUSDT);
 
-        await usdt.connect(usdtKeeper).approve(lottery.address, totalprice);
+        await usdt.connect(usdtKeeper).approve(lottery.address, totalPrice);
 
-        let txBuy = await lottery.connect(usdtKeeper).purchaseTicket(contractUSDT, 1, amount, uri);
+        const txBuy = await lottery.connect(usdtKeeper).purchaseTicket(contractUSDT, 1, amount, uri);
         txBuy.wait();
 
-        let txBalanceNFT = await lotteryTicket.balanceOf(usdtKeeper.address);
+        const txBalanceNFT = await lotteryTicket.balanceOf(usdtKeeper.address);
         await expect(txBalanceNFT).to.eq(amount);
 
-        await expect(() => txBuy).to.changeTokenBalances(usdt, [lottery.address, usdtKeeper.address], [totalprice, -totalprice]);
-        await expect(txBuy).to.emit(lottery, "PurchaseTicket").withArgs(usdtKeeper.address, amount, 1, totalprice);
-      })
+        await expect(() => txBuy).to.changeTokenBalances(
+          usdt,
+          [lottery.address, usdtKeeper.address],
+          [totalPrice, -totalPrice]
+        );
+        await expect(txBuy)
+          .to.emit(lottery, "PurchaseTicket")
+          .withArgs(usdtKeeper.address, amount, 1, totalPrice);
+      });
 
       it("reverted: try to buy 11 NFT with unsupported token", async function () {
-        let uri = "someURI.json";
-        let amount = 11;
+        const uri = "someURI.json";
+        const amount = 11;
 
-        await expect(lottery.connect(usdtKeeper).purchaseTicket(oracleUSDT, 3, amount, uri)).to.be.revertedWith("Unsupported token");
-      })
-    })
+        await expect(
+          lottery.connect(usdtKeeper).purchaseTicket(oracleUSDT, 3, amount, uri)
+        ).to.be.revertedWith("Unsupported token");
+      });
+    });
     describe("Buying NFT with BNB", function () {
       it("success", async function () {
-        let priceForOne = ethers.utils.parseUnits("2", 16);
-        let exchangeRateUSDT = await lottery.connect(usdtKeeper).getLatestPrice(2);
-        let uri = "someURI.json";
-        let amount = 50;
+        const priceForOne = ethers.utils.parseUnits("2", 16);
+        const exchangeRateUSDT = await lottery.connect(usdtKeeper).getLatestPrice(2);
+        const uri = "someURI.json";
+        const amount = 50;
 
-        let totalprice = await lottery.getTotalPrice(2, amount);
-        await bnb.connect(bnbKeeper).approve(lottery.address, totalprice);
+        const totalPrice = await lottery.getTotalPrice(2, amount);
+        await bnb.connect(bnbKeeper).approve(lottery.address, totalPrice);
 
-        let txBuy = await lottery.connect(bnbKeeper).purchaseTicket(contractBNB, 2, amount, uri);
+        const txBuy = await lottery.connect(bnbKeeper).purchaseTicket(contractBNB, 2, amount, uri);
         txBuy.wait();
 
-        let txBalanceNFT = await lotteryTicket.connect(bnbKeeper).balanceOf(bnbKeeper.address);
+        const txBalanceNFT = await lotteryTicket.connect(bnbKeeper).balanceOf(bnbKeeper.address);
         await expect(txBalanceNFT).to.eq(amount);
 
-        await expect(() => txBuy).to.changeTokenBalances(bnb, [lottery.address, bnbKeeper.address], [BigInt(totalprice), -BigInt(totalprice)]);
-        await expect(txBuy).to.emit(lottery, "PurchaseTicket").withArgs(bnbKeeper.address, amount, 2, totalprice);
-      })
-    })
+        await expect(() => txBuy).to.changeTokenBalances(
+          bnb,
+          [lottery.address, bnbKeeper.address],
+          [BigInt(totalPrice), -BigInt(totalPrice)]
+        );
+        await expect(txBuy)
+          .to.emit(lottery, "PurchaseTicket")
+          .withArgs(bnbKeeper.address, amount, 2, totalPrice);
+      });
+    });
     describe("winners", function () {
       it("reverted: lottery not over", async function () {
         await expect(lottery.connect(owner).setWinners()).to.be.revertedWith("Lottery is not over");
-      })
+      });
       it("success: payout", async function () {
         await time.increase(day * 8n);
 
-        let txWin = await lottery.connect(owner).setWinners();
+        const txWin = await lottery.connect(owner).setWinners();
         txWin.wait();
-        let txVRFreq = await vrfCoordinator.connect(owner).fulfillRandomWords(1, lottery.address);
+        const txVRFreq = await vrfCoordinator.connect(owner).fulfillRandomWords(1, lottery.address);
         txVRFreq.wait();
-        let txWinget = await lottery.connect(owner).getWinner();
+        const txGetWin = await lottery.connect(owner).getWinner();
 
-        let balanceETH = await ethers.provider.getBalance(lottery.address);
-        let ownerFeeETH = balanceETH * 10 / 100;
-        let winningAmount = BigInt(balanceETH - ownerFeeETH);
+        const balanceETH = await ethers.provider.getBalance(lottery.address);
+        const ownerFeeETH = (balanceETH * 10) / 100;
+        const winningAmount = BigInt(balanceETH - ownerFeeETH);
 
-        let balanceUSDT = await usdt.balanceOf(lottery.address);
-        let ownerFeeUSDT = Math.floor(balanceUSDT * 10 / 100);
-        let winningAmountUSDT = Math.floor(balanceUSDT - ownerFeeUSDT);
+        const balanceUSDT = await usdt.balanceOf(lottery.address);
+        const ownerFeeUSDT = Math.floor((balanceUSDT * 10) / 100);
+        const winningAmountUSDT = Math.floor(balanceUSDT - ownerFeeUSDT);
 
-        let balanceBNB = await bnb.balanceOf(lottery.address);
-        let ownerFeeBNB = Math.floor(balanceBNB * 10 / 100);
-        let winningAmountBNB = Math.floor((balanceBNB) - ownerFeeBNB);
+        const balanceBNB = await bnb.balanceOf(lottery.address);
+        const ownerFeeBNB = Math.floor((balanceBNB * 10) / 100);
+        const winningAmountBNB = Math.floor(balanceBNB - ownerFeeBNB);
 
-        let winner = await lotteryTicket.ownerOf(txWinget);
-        let balance = await ethers.provider.getBalance(winner);
+        const winner = await lotteryTicket.ownerOf(txGetWin);
+        const balance = await ethers.provider.getBalance(winner);
 
-        let payout = await lottery.connect(owner).payout();
-        await expect(() => payout).to.changeEtherBalances([lottery.address, winner, owner.address], [-BigInt(balanceETH), BigInt(winningAmount), BigInt(ownerFeeETH)]);
-        await expect(payout).to.emit(lottery, "Payout").withArgs(constants.AddressZero, owner.address, ownerFeeETH);
-        await expect(payout).to.emit(lottery, "Payout").withArgs(constants.AddressZero, winner, winningAmount);
+        const payout = await lottery.connect(owner).payout();
+        await expect(() => payout).to.changeEtherBalances(
+          [lottery.address, winner, owner.address],
+          [-BigInt(balanceETH), BigInt(winningAmount), BigInt(ownerFeeETH)]
+        );
+        await expect(payout)
+          .to.emit(lottery, "Payout")
+          .withArgs(constants.AddressZero, owner.address, BigInt(ownerFeeETH));
+        await expect(payout)
+          .to.emit(lottery, "Payout")
+          .withArgs(constants.AddressZero, winner, winningAmount);
 
-        await expect(() => payout).to.changeTokenBalances(usdt, [lottery.address, winner, owner.address], [-balanceUSDT, winningAmountUSDT, ownerFeeUSDT]);
+        await expect(() => payout).to.changeTokenBalances(
+          usdt,
+          [lottery.address, winner, owner.address],
+          [-balanceUSDT, winningAmountUSDT, ownerFeeUSDT]
+        );
         await expect(payout).to.emit(lottery, "Payout").withArgs(usdt.address, owner.address, ownerFeeUSDT);
         await expect(payout).to.emit(lottery, "Payout").withArgs(usdt.address, winner, winningAmountUSDT);
-
-      })
-    })
-  })
-})
+      });
+    });
+  });
+});

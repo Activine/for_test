@@ -1,54 +1,15 @@
 # Hardhat template, default wrapper
 
-<!-- Remove after repository creation from hire! -->
-
-## The template supports:
-
-- TypeScrip;
-- JavaScript;
-- TypeChain;
-- SolHint;
-- Prettier;
-- SolCover;
-- Eslint;
-- **CleanDeployments**;
-- **VerifyByName**;
-
-## Advantages of this HardHat template:
-
-1. **Convenient configuration** of your variables for different networks.
-2. Deployment of contracts with **type support**.
-3. Verification of contracts in a convenient way through the **Contract Name**.
-4. Configuring Solidity + TypeScript **Linters** and **Validators**.
-5. Pre-set **most popular networks**.
-6. Convenient prepared folder and file structure.
-7. **Additional Utils** for testing and interacting with smart contracts.
-8. An easy-to-use task to **clean up deployments**.
-9. Convenient and flexible configuration of **logs**, **forks** and **gas reports**.
-10. **Typed NamedAccounts** from convenient interaction.
-
-## Author part:
-
-For more convenient use, you can **fork this repository for yourself and make it your personal template**.
-
-As an author, I will be very pleased that my build was able to improve your experience in developing **amazing** decentralized applications.
-
-### :star2: Also, I will not give up stars on this and my other repositories :star2:
-
-:exclamation: Send me your comments and suggestions. :exclamation:
-
-<!-- Remove after repository creation to hire! -->
-
 ## < Project Name > smart contracts
 
-This repo will have a code of < Project Name > Smart Contracts.
+This repo will have a code of Lottery Smart Contracts.
 
 ## Setting project
 
 ### Install dependencies
 
 ```sh
-yarn install
+npm install
 ```
 
 ---
@@ -56,7 +17,7 @@ yarn install
 ### Compile contracts
 
 ```sh
-yarn compile
+npm compile
 ```
 
 ---
@@ -64,7 +25,7 @@ yarn compile
 ### Migrate contracts
 
 ```sh
-yarn migrate:<NETWORK> (mainnet, goerli, polygon, polygonMumbai, bsc, bscTestnet)
+npm migrate:<NETWORK> (mainnet, goerli, polygon, polygonMumbai, bsc, bscTestnet)
 ```
 
 ---
@@ -74,7 +35,7 @@ yarn migrate:<NETWORK> (mainnet, goerli, polygon, polygonMumbai, bsc, bscTestnet
 To verify the contract, you must specify the names of the contracts for verification through "," WITHOUT SPACES
 
 ```sh
-yarn verify:<NETWORK> <NAME_CONTRACT_FIRST>,<NAME_CONTRACT_SECOND>
+npm verify:<NETWORK> <NAME_CONTRACT_FIRST>,<NAME_CONTRACT_SECOND>
 ```
 
 ---
@@ -83,10 +44,10 @@ yarn verify:<NETWORK> <NAME_CONTRACT_FIRST>,<NAME_CONTRACT_SECOND>
 
 ```sh
 # Run Tests
-yarn test
+npm test
 
 # Run test watcher
-yarn test:watch
+npm test:watch
 ```
 
 ---
@@ -97,7 +58,7 @@ NOTE:// To work with a node or fork, you need to run the node in a separate cons
 
 ```sh
 # Run Node hardhat (For run localfork setting config { FORK_ENABLED: true, FORK_PROVIDER_URI: "https://...."})
-yarn node
+npm node
 
 # Run test watcher
 yarn test:node
@@ -108,7 +69,7 @@ yarn test:node
 ### Coverage
 
 ```sh
-yarn coverage
+npm coverage
 ```
 
 ---
@@ -119,10 +80,10 @@ You can start the gas reporter either through a separate gas reporter script thr
 
 ```sh
 # Native gas reporter
-yarn gas-reporter
+npm gas-reporter
 
 # GAS_REPORTER.ENABLED = true
-yarn test
+npm test
 ```
 
 ---
@@ -131,32 +92,32 @@ yarn test
 
 ```sh
 # Rm artifacts, cache, typechain-types
-yarn clean
+npm clean
 
 # Rm deployments for choose network
-yarn clean:deployments <NETWORK>
+npm clean:deployments <NETWORK>
 ```
 
 ### Linter
 
 ```sh
 # Checking code style for .ts, .sol
-yarn lint
+npm lint
 
 # Run fix code style for .ts, .sol
-yarn lint:fix
+npm lint:fix
 
 # Checking code style for .ts
-yarn lint:ts
+npm lint:ts
 
 # Run fix code style for .ts
-yarn lint:ts:fix
+npm lint:ts:fix
 
 # Checking code style for .sol
-yarn lint:sol
+npm lint:sol
 
 # Run fix code style for .sol
-yarn lint:sol:fix
+npm lint:sol:fix
 ```
 
 ## Auto audit with slither

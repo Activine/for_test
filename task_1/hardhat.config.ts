@@ -54,7 +54,7 @@ const config: HardhatUserConfig = {
     localhost: {
       url: "http://127.0.0.1:8545",
     },
-    mainnet: {  
+    mainnet: {
       url: `https://mainnet.infura.io/v3/${INFURA_KEY}`,
       chainId: 1,
       accounts: [DEPLOYER_KEY],

@@ -1,43 +1,40 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-
-import "hardhat/console.sol";
-
-interface MyTicket is IERC721 {
-    function batchMint(address to, uint256 amount, string memory uri) external;
-}
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Counters} from "@openzeppelin/contracts/utils/Counters.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {ILotteryTicket} from "./interfaces/ILotteryTicket.sol";
 
 contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
-    MyTicket private NFTAddress;
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+
+    address payable private owner;
+    ILotteryTicket private contractNFT;
+
     Counters.Counter public currencyId;
     Counters.Counter public ticketId;
     uint256 public loteryLimit = 500;
     uint256 public lotteryFee = 10000; // 1% = 1000
 
-    VRFCoordinatorV2Interface immutable COORDINATOR;
-    uint64 immutable s_subscriptionId;
-    bytes32 immutable s_keyHash;
-    uint32 constant CALLBACK_GAS_LIMIT = 250000;
-    uint32 constant NUM_WORDS = 1;
-    uint16 constant REQUEST_CONFIRMATIONS = 3;
-    uint256 public s_requestId;
+    VRFCoordinatorV2Interface internal immutable coordinator;
+    uint64 internal immutable _subscriptionId;
+    bytes32 internal immutable _keyHash;
+    uint32 internal constant CALLBACK_GAS_LIMIT = 250000;
+    uint32 internal constant NUM_WORDS = 1;
+    uint16 internal constant REQUEST_CONFIRMATIONS = 3;
+    uint256 public _requestId;
 
     uint256 public priceForOne = 0.02 ether;
-    address payable private owner;
     uint256 public winnerNumber;
     uint256 public lotteryDuration = 7 days;
     uint256 public lotteryStart;
@@ -48,52 +45,31 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
     mapping(uint256 => address) public ownerOfTicket;
     mapping(uint16 => uint256) public purchaseAmount;
 
-    event PurchaseTicket(
-        address indexed to,
-        uint8 amountOfTicket,
-        uint8 _currencyId,
-        uint256 price
-    );
+    event PurchaseTicket(address indexed to, uint8 amountOfTicket, uint8 _currencyId, uint256 price);
     event Withdraw(address indexed to, uint256 amount, uint8 _currencyId);
     event SetNewToken(address oracleAddress, address tokenAddress, address who);
     event WinnerNumber(uint256 winner);
-    event Payout(
-        address tokenAddress,
-        address payoutAddress,
-        uint256 amount
-    );
-
-    modifier onlyAdmin() {
-        require(
-            hasRole(DEFAULT_ADMIN_ROLE, msg.sender),
-            "Caller is not a admin"
-        );
-        _;
-    }
+    event Payout(address tokenAddress, address payoutAddress, uint256 amount);
 
     constructor(
-        address _NFTAddress,
+        address _nftAddress,
         uint64 subscriptionId,
         address vrfCoordinator,
         bytes32 keyHash
     ) VRFConsumerBaseV2(vrfCoordinator) {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        NFTAddress = MyTicket(_NFTAddress);
+        _setupRole(OPERATOR_ROLE, msg.sender);
+        contractNFT = ILotteryTicket(_nftAddress);
         owner = payable(msg.sender);
-        COORDINATOR = VRFCoordinatorV2Interface(vrfCoordinator);
-        s_keyHash = keyHash;
-        s_subscriptionId = subscriptionId;
-        listOfPiceFeed[0] = address(0);
-        listOfToken[0] = address(0);
+        coordinator = VRFCoordinatorV2Interface(vrfCoordinator);
+        _keyHash = keyHash;
+        _subscriptionId = subscriptionId;
         supportOfToken[address(0)] = true;
         currencyId.increment();
         lotteryStart = block.timestamp;
     }
 
-    function setTokenData(
-        address oracleAddress,
-        address tokenAddress
-    ) external onlyAdmin {
+    function setTokenData(address oracleAddress, address tokenAddress) external onlyRole(OPERATOR_ROLE) {
         uint8 currentId = uint8(currencyId.current());
         listOfPiceFeed[currentId] = oracleAddress;
         listOfToken[currentId] = tokenAddress;
@@ -110,18 +86,12 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
     ) external payable nonReentrant {
         require(ticketId.current() + amount <= loteryLimit, "tickets sold out");
         require(supportOfToken[_currencyAddress], "Unsupported token");
-        require(
-            block.timestamp < lotteryDuration + lotteryStart,
-            "Lottery over"
-        );
+        require(block.timestamp < lotteryDuration + lotteryStart, "Lottery over");
 
         if (_currencyAddress == address(0)) {
-            require(
-                msg.value == amount * priceForOne,
-                "Price entered incorrectly"
-            );
+            require(msg.value == amount * priceForOne, "Price entered incorrectly");
 
-            MyTicket(NFTAddress).batchMint(msg.sender, amount, uri);
+            ILotteryTicket(contractNFT).batchMint(msg.sender, amount, uri);
             purchaseAmount[_currencyId] += msg.value;
             setParticipantsList(amount);
 
@@ -135,19 +105,15 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
 
             setParticipantsList(amount);
 
-            IERC20(listOfToken[_currencyId]).safeTransferFrom(
-                msg.sender,
-                address(this),
-                totalPrice
-            );
+            IERC20(listOfToken[_currencyId]).safeTransferFrom(msg.sender, address(this), totalPrice);
 
-            MyTicket(NFTAddress).batchMint(msg.sender, amount, uri);
+            ILotteryTicket(contractNFT).batchMint(msg.sender, amount, uri);
 
             emit PurchaseTicket(msg.sender, amount, _currencyId, totalPrice);
         }
     }
 
-    function withdraw(address to) external onlyAdmin returns (bool) {
+    function withdraw(address to) external onlyRole(OPERATOR_ROLE) returns (bool) {
         uint256 balance = address(this).balance;
         require(balance > 0, "Balance is zero");
         (bool success, ) = payable(to).call{value: balance}("");
@@ -157,7 +123,7 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
         return true;
     }
 
-    function withdrawToken(uint8 tokenId, address to) external onlyAdmin {
+    function withdrawToken(uint8 tokenId, address to) external onlyRole(OPERATOR_ROLE) {
         IERC20 tokenAddress = IERC20(listOfToken[tokenId]);
         uint256 tokenBalance = tokenAddress.balanceOf(address(this));
         tokenAddress.safeTransfer(to, tokenBalance);
@@ -167,26 +133,17 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
 
     function getLatestPrice(uint8 tokenId) public view returns (int) {
         require(supportOfToken[listOfToken[tokenId]], "Unsupported token");
-        (, int price, , , ) = AggregatorV3Interface(listOfPiceFeed[tokenId])
-            .latestRoundData();
+        (, int price, , , ) = AggregatorV3Interface(listOfPiceFeed[tokenId]).latestRoundData();
         return price;
     }
 
-    function getTotalPrice(
-        uint8 tokenId,
-        uint8 amount
-    ) public view returns (uint256) {
+    function getTotalPrice(uint8 tokenId, uint8 amount) public view returns (uint256) {
         uint256 decimals;
         tokenId == 1 ? decimals = 1e6 : decimals = 1e18;
-        return
-            (priceForOne * amount * decimals) /
-            uint256(getLatestPrice(tokenId));
+        return (priceForOne * amount * decimals) / uint256(getLatestPrice(tokenId));
     }
 
-    function fulfillRandomWords(
-        uint256 /* requestId */,
-        uint256[] memory randomWords
-    ) internal override {
+    function fulfillRandomWords(uint256 /* requestId */, uint256[] memory randomWords) internal override {
         winnerNumber = randomWords[0] % ticketId.current();
 
         emit WinnerNumber(winnerNumber);
@@ -208,26 +165,24 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
         }
     }
 
-    function setWinners() external onlyAdmin {
+    function setWinners() external onlyRole(OPERATOR_ROLE) {
         require(
-            ticketId.current() == loteryLimit ||
-                block.timestamp > lotteryDuration + lotteryStart,
+            ticketId.current() == loteryLimit || block.timestamp > lotteryDuration + lotteryStart,
             "Lottery is not over"
         );
 
-        s_requestId = COORDINATOR.requestRandomWords(
-            s_keyHash,
-            s_subscriptionId,
+        _requestId = coordinator.requestRandomWords(
+            _keyHash,
+            _subscriptionId,
             REQUEST_CONFIRMATIONS,
             CALLBACK_GAS_LIMIT,
             NUM_WORDS
         );
     }
 
-    function payout() external onlyAdmin {
+    function payout() external onlyRole(OPERATOR_ROLE) {
         require(
-            ticketId.current() == loteryLimit ||
-                block.timestamp > lotteryDuration + lotteryStart,
+            ticketId.current() == loteryLimit || block.timestamp > lotteryDuration + lotteryStart,
             "Lottery is not over"
         );
         address winnerAddress = ownerOfTicket[winnerNumber];
@@ -245,9 +200,7 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
 
         (bool _success, ) = payable(_winner).call{value: winningAmount}("");
         require(_success, "Transfer failed");
-        console.log(address(0));
-        console.log(msg.sender);
-        console.log(ownerFee);
+
         emit Payout(address(0), msg.sender, ownerFee);
         emit Payout(address(0), _winner, winningAmount);
     }
