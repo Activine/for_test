@@ -113,24 +113,6 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
         }
     }
 
-    function withdraw(address to) external onlyRole(OPERATOR_ROLE) returns (bool) {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "Balance is zero");
-        (bool success, ) = payable(to).call{value: balance}("");
-        require(success, "Transfer failed");
-
-        emit Withdraw(to, balance, 99);
-        return true;
-    }
-
-    function withdrawToken(uint8 tokenId, address to) external onlyRole(OPERATOR_ROLE) {
-        IERC20 tokenAddress = IERC20(listOfToken[tokenId]);
-        uint256 tokenBalance = tokenAddress.balanceOf(address(this));
-        tokenAddress.safeTransfer(to, tokenBalance);
-
-        emit Withdraw(to, tokenBalance, tokenId);
-    }
-
     function getLatestPrice(uint8 tokenId) public view returns (int) {
         require(supportOfToken[listOfToken[tokenId]], "Unsupported token");
         (, int price, , , ) = AggregatorV3Interface(listOfPiceFeed[tokenId]).latestRoundData();
