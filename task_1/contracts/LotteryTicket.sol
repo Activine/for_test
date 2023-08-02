@@ -30,7 +30,13 @@ contract LotteryTicket is ERC721, ERC721URIStorage, AccessControl {
         baseURI = newBaseURI;
     }
 
-    function batchMint(address to, uint256 amount, string calldata uri) public onlyRole(MINTER_ROLE) {
+    function batchMint
+    (
+        address to,
+        uint256 amount,
+        // string calldata uri
+        string[] calldata uri
+    ) public onlyRole(MINTER_ROLE) {
         uint256 tokenId;
         uint256[] memory idArr = new uint256[](amount);
 
@@ -38,7 +44,7 @@ contract LotteryTicket is ERC721, ERC721URIStorage, AccessControl {
             tokenId = _tokenIdCounter.current();
             idArr[i] = tokenId;
             _mint(to, tokenId);
-            _setTokenURI(tokenId, uri);
+            _setTokenURI(tokenId, uri[i]);
             unchecked {
                 ++i;
                 _tokenIdCounter.increment();

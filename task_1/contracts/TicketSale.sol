@@ -11,8 +11,11 @@ import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interface
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ILotteryTicket} from "./interfaces/ILotteryTicket.sol";
+import "./Signature2.sol";
+// import "./Signature.sol";
 
-contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
+
+contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessControl {
     using SafeERC20 for IERC20;
     using Counters for Counters.Counter;
 
@@ -53,10 +56,13 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
 
     constructor(
         address _nftAddress,
+        string memory _name,
+        string memory _version,
         uint64 subscriptionId,
         address vrfCoordinator,
         bytes32 keyHash
     ) VRFConsumerBaseV2(vrfCoordinator) {
+        __Signature_init(_name, _version);
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(OPERATOR_ROLE, msg.sender);
         contractNFT = ILotteryTicket(_nftAddress);
@@ -82,12 +88,22 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, AccessControl {
         address _currencyAddress,
         uint8 _currencyId,
         uint8 amount,
-        string calldata uri
+        // string memory uri,
+        string[] memory uri,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external payable nonReentrant {
         require(ticketId.current() + amount <= loteryLimit, "tickets sold out");
         require(supportOfToken[_currencyAddress], "Unsupported token");
         require(block.timestamp < lotteryDuration + lotteryStart, "Lottery over");
-
+        require(
+            hasRole(
+                DEFAULT_ADMIN_ROLE,
+                _getSigner(msg.sender, uri, amount, v, r, s)
+            ),
+            "Action is inconsistent."
+        );
         if (_currencyAddress == address(0)) {
             require(msg.value == amount * priceForOne, "Price entered incorrectly");
 
