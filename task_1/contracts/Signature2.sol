@@ -12,31 +12,18 @@ contract Signature {
     struct SignData {
         uint256 amount;
         address buyer;
-        string[] uri;
+        bytes uri;
     }
 
     bytes32 private constant EIP712DOMAIN_TYPEHASH =
-        keccak256(
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-        );
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
-    bytes32 private constant SIGNDATA_TYPEHASH =
-        keccak256(
-            "SignData(uint256 amount,address buyer,string[] uri)"
-        );
+    bytes32 private constant SIGNDATA_TYPEHASH = keccak256("SignData(uint256 amount,address buyer,bytes uri)");
     bytes32 private eip712DomainSeparator;
 
-    function __Signature_init(
-        string memory _name,
-        string memory _version
-    ) internal {
+    function __Signature_init(string memory _name, string memory _version) internal {
         eip712DomainSeparator = _hash(
-            EIP712Domain({
-                name: _name,
-                version: _version,
-                chainId: block.chainid,
-                verifyingContract: address(this)
-            })
+            EIP712Domain({name: _name, version: _version, chainId: block.chainid, verifyingContract: address(this)})
         );
     }
 
@@ -60,14 +47,15 @@ contract Signature {
                     SIGNDATA_TYPEHASH,
                     signData.amount,
                     signData.buyer,
-                    keccak256(abi.encode(signData.uri))
+                    // signData.uri
+                    keccak256(bytes(abi.encode(signData.uri)))
                 )
             );
     }
 
     function _getSigner(
         address buyer,
-        string[] memory uri,
+        bytes memory uri,
         uint8 amount,
         uint8 v,
         bytes32 r,
@@ -77,23 +65,13 @@ contract Signature {
             abi.encodePacked(
                 "\x19\x01",
                 eip712DomainSeparator,
-                _hash(
-                    SignData({
-                        amount: amount,
-                        buyer: buyer,
-                        uri: uri
-                    })
-                )
+                _hash(SignData({amount: amount, buyer: buyer, uri: uri}))
             )
         );
         return ecrecover(digest, v, r, s);
     }
 
-    function encodeStringArray(string[] memory data)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function encodeStringArray(string[] memory data) public pure returns (bytes memory) {
         uint256 dataLength = data.length;
         uint256 totalLength = 32 + (32 * dataLength);
 

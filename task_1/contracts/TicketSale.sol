@@ -11,9 +11,10 @@ import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interface
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ILotteryTicket} from "./interfaces/ILotteryTicket.sol";
-import "./Signature2.sol";
-// import "./Signature.sol";
+// import "./Signature2.sol";
+import "./Signature.sol";
 
+import "hardhat/console.sol";
 
 contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessControl {
     using SafeERC20 for IERC20;
@@ -50,7 +51,8 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
 
     event PurchaseTicket(address indexed to, uint8 amountOfTicket, uint8 _currencyId, uint256 price);
     event Withdraw(address indexed to, uint256 amount, uint8 _currencyId);
-    event SetNewToken(address oracleAddress, address tokenAddress, address who);
+    event SetNewToken(address oracleAddress, address tokenAddress);
+    event DeleteToken(address oracleAddress, address tokenAddress);
     event WinnerNumber(uint256 winner);
     event Payout(address tokenAddress, address payoutAddress, uint256 amount);
 
@@ -81,29 +83,39 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
         listOfToken[currentId] = tokenAddress;
         supportOfToken[tokenAddress] = true;
         currencyId.increment();
-        emit SetNewToken(oracleAddress, tokenAddress, msg.sender);
+        emit SetNewToken(oracleAddress, tokenAddress);
+    }
+
+    function deleteTokenData(
+        address oracleAddress,
+        address tokenAddress,
+        uint8 idToken
+    ) external onlyRole(OPERATOR_ROLE) {
+        require(
+            tokenAddress == listOfToken[idToken] && oracleAddress == listOfPiceFeed[idToken],
+            "Incorrect addresses"
+        );
+        listOfPiceFeed[idToken] = address(0);
+        listOfToken[idToken] = address(0);
+        supportOfToken[tokenAddress] = false;
+        emit DeleteToken(oracleAddress, tokenAddress);
     }
 
     function purchaseTicket(
         address _currencyAddress,
         uint8 _currencyId,
         uint8 amount,
-        // string memory uri,
-        string[] memory uri,
+        string memory uri,
+        // string[] memory uri,
         uint8 v,
         bytes32 r,
         bytes32 s
     ) external payable nonReentrant {
-        require(ticketId.current() + amount <= loteryLimit, "tickets sold out");
-        require(supportOfToken[_currencyAddress], "Unsupported token");
+        require(ticketId.current() + amount <= loteryLimit, "Tickets sold out");
+        require(supportOfToken[_currencyAddress] && listOfToken[_currencyId] == _currencyAddress, "Unsupported token");
+        require(hasRole(DEFAULT_ADMIN_ROLE, _getSigner(msg.sender, uri, amount, v, r, s)), "Action is inconsistent.");
         require(block.timestamp < lotteryDuration + lotteryStart, "Lottery over");
-        require(
-            hasRole(
-                DEFAULT_ADMIN_ROLE,
-                _getSigner(msg.sender, uri, amount, v, r, s)
-            ),
-            "Action is inconsistent."
-        );
+
         if (_currencyAddress == address(0)) {
             require(msg.value == amount * priceForOne, "Price entered incorrectly");
 
@@ -130,12 +142,13 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
     }
 
     function getLatestPrice(uint8 tokenId) public view returns (int) {
-        require(supportOfToken[listOfToken[tokenId]], "Unsupported token");
+        require(listOfToken[tokenId] != address(0), "Unsupported token");
         (, int price, , , ) = AggregatorV3Interface(listOfPiceFeed[tokenId]).latestRoundData();
         return price;
     }
 
     function getTotalPrice(uint8 tokenId, uint8 amount) public view returns (uint256) {
+        require(listOfToken[tokenId] != address(0), "Unsupported token");
         uint256 decimals;
         tokenId == 1 ? decimals = 1e6 : decimals = 1e18;
         return (priceForOne * amount * decimals) / uint256(getLatestPrice(tokenId));
@@ -143,7 +156,7 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
 
     function fulfillRandomWords(uint256 /* requestId */, uint256[] memory randomWords) internal override {
         winnerNumber = randomWords[0] % ticketId.current();
-
+        console.log(winnerNumber);
         emit WinnerNumber(winnerNumber);
     }
 
@@ -165,7 +178,7 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
 
     function setWinners() external onlyRole(OPERATOR_ROLE) {
         require(
-            ticketId.current() == loteryLimit || block.timestamp > lotteryDuration + lotteryStart,
+            block.timestamp > lotteryDuration + lotteryStart || ticketId.current() == loteryLimit,
             "Lottery is not over"
         );
 
@@ -180,7 +193,7 @@ contract TicketSale is VRFConsumerBaseV2, ReentrancyGuard, Signature, AccessCont
 
     function payout() external onlyRole(OPERATOR_ROLE) {
         require(
-            ticketId.current() == loteryLimit || block.timestamp > lotteryDuration + lotteryStart,
+            block.timestamp > lotteryDuration + lotteryStart || ticketId.current() == loteryLimit,
             "Lottery is not over"
         );
         address winnerAddress = ownerOfTicket[winnerNumber];

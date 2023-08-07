@@ -5,7 +5,7 @@ interface ILotteryTicket {
     function batchMint(
         address to,
         uint256 amount,
-        // string memory uri
-        string[] memory uri
+        string memory uri
+        // string[] memory uri
     ) external;
 }
